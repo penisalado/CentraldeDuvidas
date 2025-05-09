@@ -20,7 +20,7 @@ const ratingDescriptions = {
 4: 'Fácil de entender',
 3: 'Compreensível',
 2: 'Confuso em partes',
-1: 'Difícil de entender'
+1: 'Difícil de entender' 
   }
 
 const fetchRatings = async () => {

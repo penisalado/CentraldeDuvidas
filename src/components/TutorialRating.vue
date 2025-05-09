@@ -16,11 +16,11 @@ const error = ref('')
 const isOpen = ref(false)
 
 const ratingDescriptions = {
-5: 'Muito claro e objetivo',
-4: 'Fácil de entender',
+1: 'Muito claro e objetivo',
+2: 'Fácil de entender',
 3: 'Compreensível',
-2: 'Confuso em partes',
-1: 'Difícil de entender' 
+4: 'Confuso em partes',
+5: 'Difícil de entender'
   }
 
 const fetchRatings = async () => {

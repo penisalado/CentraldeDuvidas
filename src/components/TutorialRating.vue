@@ -12,7 +12,7 @@ const averageRating = ref(0)
 const totalVotes = ref(0)
 const hasVoted = ref(false)
 const loading = ref(false)
-const error = ref('')
+const error = ref('') 
 const isOpen = ref(false)
 
 const ratingDescriptions = {

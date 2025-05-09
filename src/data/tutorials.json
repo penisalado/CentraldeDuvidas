@@ -1,0 +1,78 @@
+{
+  "categories": [
+    {
+      "id": "sac-suporte",
+      "code": "A.W 1",
+      "title": "SAC/Suporte",
+      "category": "sac-suporte",
+      "icon": "material-symbols:support-agent",
+      "iconColor": "#2196F3",
+      "description": "Procedimentos e tutoriais para atendimento ao cliente e suporte técnico",
+      "subtopics": [
+        {
+          "id": "atendimento-geral",
+          "code": "A.W 1.1",
+          "title": "Atendimento Geral",
+          "category": "sac-suporte",
+          "subtopics": [
+            {
+              "id": "segunda-via-boleto",
+              "code": "A.W 1.1.1",
+              "title": "Segunda via de boleto",
+              "category": "sac-suporte",
+              "content": "# ENVIO DE 2° VIA DE BOLETO\n\n## 1° Passo\n\nO envio de 2° via é feito pela tela de atendimento (mesma tela para abrir solicitação). Na aba \"Financeiro\" selecione \"2° via de faturas\". Após isso, selecione a fatura a ser enviada. Caso o envio seja pelo Blip (em PDF) selecione o ícone da impressora. Para o envio pelo e-mail ou SMS, selecione o ícone da carta."
+            },
+            {
+              "id": "alteracao-vencimento",
+              "code": "A.W 1.1.2",
+              "title": "Alteração de Vencimento",
+              "category": "sac-suporte",
+              "content": "# Alteração de Data de Vencimento\n\n## Procedimento\n\n1. Verificar se o cliente está adimplente\n2. Confirmar nova data desejada\n3. Atualizar no sistema\n4. Informar que a alteração ocorre em até 2 faturas"
+            }
+          ]
+        },
+        {
+          "id": "suporte-tecnico",
+          "code": "A.W 1.2",
+          "title": "Suporte Técnico",
+          "category": "sac-suporte",
+          "subtopics": [
+            {
+              "id": "configuracao-wifi",
+              "code": "A.W 1.2.1",
+              "title": "Configuração de WiFi",
+              "category": "sac-suporte",
+              "content": "# Configuração de WiFi\n\n## Passos para configuração\n\n1. Acessar interface do roteador\n2. Alterar nome da rede e senha\n3. Configurar canal automático\n4. Ativar WPA2 para segurança"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "retencao",
+      "code": "A.W 2",
+      "title": "Retenção",
+      "category": "retencao",
+      "icon": "material-symbols:handshake-rounded",
+      "iconColor": "#4CAF50",
+      "description": "Guias e procedimentos para negociação e retenção de clientes",
+      "subtopics": [
+        {
+          "id": "negociacao",
+          "code": "A.W 2.1",
+          "title": "Negociação",
+          "category": "retencao",
+          "subtopics": [
+            {
+              "id": "desconto-fidelidade",
+              "code": "A.W 2.1.1",
+              "title": "Desconto Fidelidade",
+              "category": "retencao",
+              "content": "# Desconto Fidelidade\n\n## Critérios\n\n1. Cliente há mais de 12 meses\n2. Sem pendências financeiras\n3. Desconto máximo de 15%\n4. Fidelidade de 12 meses"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

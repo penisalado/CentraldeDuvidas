@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// Importações necessárias
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
@@ -9,15 +10,18 @@ import SearchBar from './SearchBar.vue'
 import ImageModal from './ImageModal.vue'
 import TutorialRating from './TutorialRating.vue'
 
+// Hooks do Vue Router
 const route = useRoute()
 const router = useRouter()
 
+// Estado do modal de imagem
 const showImageModal = ref(false)
 const selectedImage = ref({
   src: '',
   alt: ''
 })
 
+// Configuração do marked para processar imagens com preview
 marked.use({
   renderer: {
     html(html) {
@@ -39,26 +43,31 @@ marked.use({
   }
 })
 
+// Função global para abrir o modal de imagem
 window.__openImage = (src: string, alt: string) => {
   selectedImage.value = { src, alt }
   showImageModal.value = true
 }
 
+// Estados do componente
 const categories = ref<Category[]>([])
 const tutorials = ref<Tutorial[]>([])
 const selectedTutorial = ref<Tutorial | null>(null)
 const isLoading = ref(true)
 const error = ref('')
 
+// Carrega dados ao montar o componente
 onMounted(async () => {
   await loadData()
 })
 
+// Função para carregar dados do Supabase
 async function loadData() {
   try {
     const categoryId = route.params.id as string
     const tutorialId = route.query.tutorial as string
 
+    // Carrega categorias e tutoriais em paralelo
     const [categoriesResponse, tutorialsResponse] = await Promise.all([
       supabase.from('categories').select('*').order('order_position'),
       supabase.from('tutorials').select('*').eq('category_id', categoryId).order('order_position')
@@ -70,6 +79,7 @@ async function loadData() {
     categories.value = categoriesResponse.data
     tutorials.value = tutorialsResponse.data
 
+    // Seleciona tutorial se especificado na URL
     if (tutorialId) {
       const tutorial = tutorialsResponse.data.find(t => t.id === tutorialId)
       if (tutorial) {
@@ -84,8 +94,10 @@ async function loadData() {
   }
 }
 
+// Estado da busca
 const searchQuery = ref('')
 
+// Filtra tutoriais baseado na busca
 const filteredTutorials = computed(() => {
   if (!searchQuery.value) {
     return tutorials.value
@@ -99,10 +111,12 @@ const filteredTutorials = computed(() => {
   )
 })
 
+// Obtém categoria atual
 const currentCategory = computed(() => {
   return categories.value.find(c => c.id === route.params.id)
 })
 
+// Função para voltar
 const goBack = () => {
   if (selectedTutorial.value) {
     selectedTutorial.value = null
@@ -112,11 +126,13 @@ const goBack = () => {
   }
 }
 
+// Converte markdown para HTML
 const formattedContent = computed(() => {
   if (!selectedTutorial.value?.content) return ''
   return marked(selectedTutorial.value.content)
 })
 
+// Observa mudanças na rota
 watch(
   [() => route.params.id, () => route.query.tutorial],
   async ([newCategoryId, newTutorialId]) => {
@@ -127,6 +143,7 @@ watch(
   { immediate: true }
 )
 
+// Seleciona um tutorial
 const selectTutorial = (tutorial: Tutorial) => {
   selectedTutorial.value = tutorial
   router.replace({ query: { tutorial: tutorial.id } })
@@ -135,7 +152,9 @@ const selectTutorial = (tutorial: Tutorial) => {
 
 <template>
   <div class="tutorial-view" v-if="!isLoading">
+    <!-- Container principal -->
     <div v-if="currentCategory" class="tutorial-container">
+      <!-- Cabeçalho -->
       <div class="tutorial-header">
         <button class="back-button" @click="goBack">← Voltar</button>
         <div class="header-content">
@@ -144,6 +163,7 @@ const selectTutorial = (tutorial: Tutorial) => {
         </div>
       </div>
 
+      <!-- Lista de tutoriais -->
       <div v-if="!selectedTutorial" class="tutorials-list">
         <div 
           v-for="tutorial in filteredTutorials" 
@@ -157,6 +177,7 @@ const selectTutorial = (tutorial: Tutorial) => {
         </div>
       </div>
 
+      <!-- Conteúdo do tutorial -->
       <div v-else class="tutorial-content">
         <div class="tutorial-content-header">
           <div class="tutorial-code">{{ selectedTutorial.code }}</div>
@@ -164,12 +185,14 @@ const selectTutorial = (tutorial: Tutorial) => {
         </div>
         <div class="content-body" v-html="formattedContent"></div>
         
+        <!-- Componente de avaliação -->
         <TutorialRating 
           v-if="selectedTutorial"
           :tutorial-id="selectedTutorial.id"
         />
       </div>
 
+      <!-- Modal de imagem -->
       <ImageModal 
         :show="showImageModal"
         :image-src="selectedImage.src"
@@ -177,23 +200,29 @@ const selectTutorial = (tutorial: Tutorial) => {
         @close="showImageModal = false"
       />
     </div>
+
+    <!-- Mensagem de categoria não encontrada -->
     <div v-else class="not-found">
       <h2>Categoria não encontrada</h2>
       <button class="back-button" @click="router.push('/')">← Voltar para a página inicial</button>
     </div>
   </div>
+
+  <!-- Loading state -->
   <div v-else class="loading">
     <p>Carregando...</p>
   </div>
 </template>
 
 <style scoped>
+/* Container principal */
 .tutorial-view {
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem;
 }
 
+/* Cabeçalho */
 .tutorial-header {
   margin-bottom: 2rem;
 }
@@ -208,6 +237,7 @@ const selectTutorial = (tutorial: Tutorial) => {
   font-size: 1.8rem;
 }
 
+/* Botão voltar */
 .back-button {
   background: none;
   border: none;
@@ -223,6 +253,7 @@ const selectTutorial = (tutorial: Tutorial) => {
   text-decoration: underline;
 }
 
+/* Lista de tutoriais */
 .tutorials-list {
   background: white;
   border-radius: 12px;
@@ -230,6 +261,7 @@ const selectTutorial = (tutorial: Tutorial) => {
   overflow: hidden;
 }
 
+/* Item da lista */
 .tutorial-item {
   display: flex;
   align-items: center;
@@ -247,6 +279,7 @@ const selectTutorial = (tutorial: Tutorial) => {
   border-bottom: none;
 }
 
+/* Código do tutorial */
 .tutorial-code {
   font-family: monospace;
   color: #ff5722;
@@ -256,16 +289,19 @@ const selectTutorial = (tutorial: Tutorial) => {
   min-width: 80px;
 }
 
+/* Título do tutorial */
 .tutorial-title {
   flex: 1;
   color: #2c3e50;
 }
 
+/* Ícone do tutorial */
 .tutorial-icon {
   color: #6c757d;
   font-size: 1.25rem;
 }
 
+/* Conteúdo do tutorial */
 .tutorial-content {
   background: white;
   padding: 2rem;
@@ -273,6 +309,7 @@ const selectTutorial = (tutorial: Tutorial) => {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
+/* Cabeçalho do conteúdo */
 .tutorial-content-header {
   margin-bottom: 2rem;
   padding-bottom: 1rem;
@@ -284,10 +321,12 @@ const selectTutorial = (tutorial: Tutorial) => {
   color: #2c3e50;
 }
 
+/* Corpo do conteúdo */
 .content-body {
   line-height: 1.6;
 }
 
+/* Estilos do markdown renderizado */
 .content-body :deep(h1) {
   font-size: 1.8rem;
   color: #2c3e50;
@@ -313,6 +352,7 @@ const selectTutorial = (tutorial: Tutorial) => {
   margin-bottom: 0.5rem;
 }
 
+/* Estilos dos passos do tutorial */
 .content-body :deep(.tutorial-step) {
   display: flex;
   gap: 2rem;
@@ -334,6 +374,7 @@ const selectTutorial = (tutorial: Tutorial) => {
   margin: 1.5rem 0;
 }
 
+/* Estilos do preview de imagem */
 .content-body :deep(.image-preview) {
   position: relative;
   border-radius: 8px;
@@ -353,6 +394,7 @@ const selectTutorial = (tutorial: Tutorial) => {
   height: auto;
 }
 
+/* Zoom da imagem */
 .content-body :deep(.image-zoom) {
   position: absolute;
   bottom: 0;
@@ -371,12 +413,14 @@ const selectTutorial = (tutorial: Tutorial) => {
   opacity: 1;
 }
 
+/* Estados de loading e não encontrado */
 .loading, .not-found {
   text-align: center;
   padding: 2rem;
   color: #6c757d;
 }
 
+/* Responsividade */
 @media (max-width: 768px) {
   .tutorial-view {
     padding: 1rem;

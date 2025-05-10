@@ -107,7 +107,8 @@ const uploadImage = async (file: File) => {
       })
 
     if (uploadError) {
-      throw uploadError
+      console.error('Upload error:', uploadError)
+      throw new Error('Erro ao fazer upload da imagem. Por favor, tente novamente.')
     }
 
     const { data: { publicUrl } } = supabase.storage

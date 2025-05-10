@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// Importações necessárias
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
@@ -9,6 +8,11 @@ import type { Category, Tutorial } from '../lib/supabase'
 import SearchBar from './SearchBar.vue'
 import ImageModal from './ImageModal.vue'
 import TutorialRating from './TutorialRating.vue'
+import { Editor, EditorContent } from '@tiptap/vue-3'
+import StarterKit from '@tiptap/starter-kit'
+import Image from '@tiptap/extension-image'
+import Dropcursor from '@tiptap/extension-dropcursor'
+import ResizeImage from '@tiptap/extension-resize-image'
 
 // Hooks do Vue Router
 const route = useRoute()
@@ -21,32 +25,95 @@ const selectedImage = ref({
   alt: ''
 })
 
-// Configuração do marked para processar imagens com preview
-marked.use({
-  renderer: {
-    html(html) {
-      return html.replace(
-        /<div class="image-preview".*?>(.*?)<\/div>/g,
-        (match, content) => {
-          const imgMatch = content.match(/src="([^"]+)".*?alt="([^"]+)"/)
-          if (imgMatch) {
-            const [_, src, alt] = imgMatch
-            return `<div class="image-preview" onclick="window.__openImage('${src}', '${alt}')">
-              ${content}
-              <span class="image-zoom">🔍 Ampliar imagem</span>
-            </div>`
-          }
-          return match
-        }
-      )
+// Editor TipTap com suporte a drag & drop e redimensionamento
+const editor = new Editor({
+  extensions: [
+    StarterKit,
+    Dropcursor,
+    Image.configure({
+      inline: true,
+      allowBase64: true,
+      HTMLAttributes: {
+        class: 'tutorial-image',
+      },
+    }),
+    ResizeImage.configure({
+      handleClass: 'resize-handle',
+      displayToolbar: true,
+    }),
+  ],
+  content: '',
+  editable: true,
+  onDrop: (view, event, slice, moved) => {
+    if (!event.dataTransfer?.files?.length) return
+
+    const file = event.dataTransfer.files[0]
+    if (file.type.startsWith('image/')) {
+      handleImageDrop(file, view, event)
+      return true
     }
-  }
+    return false
+  },
 })
 
-// Função global para abrir o modal de imagem
-window.__openImage = (src: string, alt: string) => {
-  selectedImage.value = { src, alt }
-  showImageModal.value = true
+// Função para lidar com o drop de imagens
+const handleImageDrop = async (file: File, view: any, event: DragEvent) => {
+  try {
+    const url = await uploadImage(file)
+    const { schema } = view.state
+    const coordinates = view.posAtCoords({
+      left: event.clientX,
+      top: event.clientY,
+    })
+
+    const node = schema.nodes.image.create({ src: url })
+    const transaction = view.state.tr.insert(coordinates.pos, node)
+    view.dispatch(transaction)
+  } catch (error) {
+    console.error('Error handling image drop:', error)
+  }
+}
+
+// Função para fazer upload de imagem
+const uploadImage = async (file: File) => {
+  try {
+    const fileExt = file.name.split('.').pop()
+    const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`
+    const filePath = `tutorial-images/${fileName}`
+
+    const { data, error: uploadError } = await supabase.storage
+      .from('tutorial-assets')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      })
+
+    if (uploadError) throw uploadError
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('tutorial-assets')
+      .getPublicUrl(filePath)
+
+    return publicUrl
+  } catch (error) {
+    console.error('Error uploading image:', error)
+    throw error
+  }
+}
+
+// Handler para upload de imagem via botão
+const handleImageUpload = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  if (!input.files?.length) return
+
+  try {
+    const file = input.files[0]
+    const url = await uploadImage(file)
+    
+    editor.chain().focus().setImage({ src: url }).run()
+  } catch (error) {
+    console.error('Error handling image upload:', error)
+  }
 }
 
 // Estados do componente
@@ -67,7 +134,6 @@ async function loadData() {
     const categoryId = route.params.id as string
     const tutorialId = route.query.tutorial as string
 
-    // Carrega categorias e tutoriais em paralelo
     const [categoriesResponse, tutorialsResponse] = await Promise.all([
       supabase.from('categories').select('*').order('order_position'),
       supabase.from('tutorials').select('*').eq('category_id', categoryId).order('order_position')
@@ -79,11 +145,11 @@ async function loadData() {
     categories.value = categoriesResponse.data
     tutorials.value = tutorialsResponse.data
 
-    // Seleciona tutorial se especificado na URL
     if (tutorialId) {
       const tutorial = tutorialsResponse.data.find(t => t.id === tutorialId)
       if (tutorial) {
         selectedTutorial.value = tutorial
+        editor.commands.setContent(tutorial.content || '')
       }
     }
   } catch (err) {
@@ -99,9 +165,7 @@ const searchQuery = ref('')
 
 // Filtra tutoriais baseado na busca
 const filteredTutorials = computed(() => {
-  if (!searchQuery.value) {
-    return tutorials.value
-  }
+  if (!searchQuery.value) return tutorials.value
   
   const query = searchQuery.value.toLowerCase()
   return tutorials.value.filter(tutorial => 
@@ -126,11 +190,12 @@ const goBack = () => {
   }
 }
 
-// Converte markdown para HTML
-const formattedContent = computed(() => {
-  if (!selectedTutorial.value?.content) return ''
-  return marked(selectedTutorial.value.content)
-})
+// Seleciona um tutorial
+const selectTutorial = (tutorial: Tutorial) => {
+  selectedTutorial.value = tutorial
+  editor.commands.setContent(tutorial.content || '')
+  router.replace({ query: { tutorial: tutorial.id } })
+}
 
 // Observa mudanças na rota
 watch(
@@ -142,19 +207,11 @@ watch(
   },
   { immediate: true }
 )
-
-// Seleciona um tutorial
-const selectTutorial = (tutorial: Tutorial) => {
-  selectedTutorial.value = tutorial
-  router.replace({ query: { tutorial: tutorial.id } })
-}
 </script>
 
 <template>
   <div class="tutorial-view" v-if="!isLoading">
-    <!-- Container principal -->
     <div v-if="currentCategory" class="tutorial-container">
-      <!-- Cabeçalho -->
       <div class="tutorial-header">
         <button class="back-button" @click="goBack">← Voltar</button>
         <div class="header-content">
@@ -163,7 +220,6 @@ const selectTutorial = (tutorial: Tutorial) => {
         </div>
       </div>
 
-      <!-- Lista de tutoriais -->
       <div v-if="!selectedTutorial" class="tutorials-list">
         <div 
           v-for="tutorial in filteredTutorials" 
@@ -177,22 +233,38 @@ const selectTutorial = (tutorial: Tutorial) => {
         </div>
       </div>
 
-      <!-- Conteúdo do tutorial -->
       <div v-else class="tutorial-content">
         <div class="tutorial-content-header">
           <div class="tutorial-code">{{ selectedTutorial.code }}</div>
           <h2>{{ selectedTutorial.title }}</h2>
         </div>
-        <div class="content-body" v-html="formattedContent"></div>
         
-        <!-- Componente de avaliação -->
+        <!-- Editor TipTap -->
+        <div class="editor-container">
+          <editor-content :editor="editor" />
+          
+          <!-- Botão de upload de imagem -->
+          <div class="image-upload">
+            <input
+              type="file"
+              accept="image/*"
+              @change="handleImageUpload"
+              class="hidden-input"
+              id="image-upload"
+            />
+            <label for="image-upload" class="upload-button">
+              <Icon icon="material-symbols:add-photo-alternate" class="upload-icon" />
+              Adicionar Imagem
+            </label>
+          </div>
+        </div>
+        
         <TutorialRating 
           v-if="selectedTutorial"
           :tutorial-id="selectedTutorial.id"
         />
       </div>
 
-      <!-- Modal de imagem -->
       <ImageModal 
         :show="showImageModal"
         :image-src="selectedImage.src"
@@ -201,20 +273,18 @@ const selectTutorial = (tutorial: Tutorial) => {
       />
     </div>
 
-    <!-- Mensagem de categoria não encontrada -->
     <div v-else class="not-found">
       <h2>Categoria não encontrada</h2>
       <button class="back-button" @click="router.push('/')">← Voltar para a página inicial</button>
     </div>
   </div>
 
-  <!-- Loading state -->
   <div v-else class="loading">
     <p>Carregando...</p>
   </div>
 </template>
 
-<style scoped>
+<style>
 /* Container principal */
 .tutorial-view {
   max-width: 1200px;
@@ -321,96 +391,80 @@ const selectTutorial = (tutorial: Tutorial) => {
   color: #2c3e50;
 }
 
-/* Corpo do conteúdo */
-.content-body {
-  line-height: 1.6;
-}
-
-/* Estilos do markdown renderizado */
-.content-body :deep(h1) {
-  font-size: 1.8rem;
-  color: #2c3e50;
-  margin-bottom: 1.5rem;
-}
-
-.content-body :deep(h2) {
-  font-size: 1.4rem;
-  color: #2c3e50;
-  margin: 2rem 0 1rem;
-}
-
-.content-body :deep(p) {
-  margin-bottom: 1rem;
-}
-
-.content-body :deep(ul) {
-  margin: 1rem 0;
-  padding-left: 1.5rem;
-}
-
-.content-body :deep(li) {
-  margin-bottom: 0.5rem;
-}
-
-/* Estilos dos passos do tutorial */
-.content-body :deep(.tutorial-step) {
-  display: flex;
-  gap: 2rem;
-  margin: 1.5rem 0;
-  align-items: flex-start;
-}
-
-.content-body :deep(.tutorial-text) {
-  flex: 1;
-}
-
-.content-body :deep(.tutorial-image) {
-  flex-shrink: 0;
-  width: 400px;
-}
-
-.content-body :deep(.tutorial-image.full-width) {
-  width: 100%;
-  margin: 1.5rem 0;
-}
-
-/* Estilos do preview de imagem */
-.content-body :deep(.image-preview) {
+/* Editor container */
+.editor-container {
   position: relative;
+  margin-bottom: 2rem;
+  border: 1px solid #e2e2e2;
   border-radius: 8px;
   overflow: hidden;
-  cursor: zoom-in;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s ease;
 }
 
-.content-body :deep(.image-preview:hover) {
-  transform: scale(1.02);
+/* Estilos do editor */
+.ProseMirror {
+  padding: 1rem;
+  min-height: 300px;
+  outline: none;
 }
 
-.content-body :deep(.image-preview img) {
-  display: block;
-  width: 100%;
+.ProseMirror img {
+  max-width: 100%;
   height: auto;
+  cursor: pointer;
+  display: inline-block;
+  margin: 1rem 0;
+  border-radius: 4px;
 }
 
-/* Zoom da imagem */
-.content-body :deep(.image-zoom) {
+.ProseMirror img.resize-handle {
+  position: relative;
+}
+
+.ProseMirror img.resize-handle::after {
+  content: '';
   position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  padding: 0.5rem;
-  font-size: 0.875rem;
-  text-align: center;
-  opacity: 0;
-  transition: opacity 0.2s;
+  right: -6px;
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  background: #ff5722;
+  border-radius: 50%;
+  border: 2px solid white;
+  cursor: se-resize;
 }
 
-.content-body :deep(.image-preview:hover .image-zoom) {
-  opacity: 1;
+/* Imagem upload */
+.image-upload {
+  padding: 1rem;
+  border-top: 1px solid #e2e2e2;
+  background: #f8f9fa;
+}
+
+.hidden-input {
+  display: none;
+}
+
+.upload-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background-color: white;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #495057;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.upload-button:hover {
+  background-color: #f1f3f5;
+  border-color: #ced4da;
+}
+
+.upload-icon {
+  font-size: 1.25rem;
 }
 
 /* Estados de loading e não encontrado */
@@ -432,15 +486,6 @@ const selectTutorial = (tutorial: Tutorial) => {
   
   .tutorial-content {
     padding: 1.5rem;
-  }
-
-  .content-body :deep(.tutorial-step) {
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .content-body :deep(.tutorial-image) {
-    width: 100% !important;
   }
 }
 </style>

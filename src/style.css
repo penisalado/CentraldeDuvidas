@@ -104,14 +104,3 @@ body {
   border-radius: 3px;
   font-family: monospace;
 }
-
-/* Link styles */
-.ProseMirror a {
-  color: #2563eb;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-.ProseMirror a:hover {
-  color: #1d4ed8;
-}

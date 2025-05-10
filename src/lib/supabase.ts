@@ -44,18 +44,27 @@ const BUCKET_NAME = 'tutorial-assets'
 
 export async function uploadFile(file: File, path: string): Promise<string> {
   try {
+    // Check if bucket exists
+    const { data: buckets, error: bucketsError } = await supabase
+      .storage
+      .listBuckets()
+
+    if (bucketsError) throw bucketsError
+
+    const bucketExists = buckets.some(bucket => bucket.name === BUCKET_NAME)
+    if (!bucketExists) {
+      throw new Error(`Bucket ${BUCKET_NAME} not found. Please ensure it exists in your Supabase project.`)
+    }
+
     // Upload file
     const { data, error } = await supabase.storage
       .from(BUCKET_NAME)
-      .upload(path, file, {
-        cacheControl: '3600',
-        upsert: false
-      })
+      .upload(path, file)
 
     if (error) throw error
 
     // Get public URL
-    const { data: { publicUrl }, error: urlError } = supabase.storage
+    const { data: { publicUrl }, error: urlError } = await supabase.storage
       .from(BUCKET_NAME)
       .getPublicUrl(path)
 

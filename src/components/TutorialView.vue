@@ -116,9 +116,9 @@ const uploadImage = async (file: File) => {
       .getPublicUrl(filePath)
 
     return publicUrl
-  } catch (error) {
-    console.error('Error uploading image:', error)
-    throw error
+  } catch (err) {
+    console.error('Error in uploadImage:', err)
+    throw err
   }
 }
 

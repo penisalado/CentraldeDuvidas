@@ -40,39 +40,14 @@ export type QuickLink = {
 }
 
 // Bucket para armazenamento de arquivos
-const BUCKET_NAME = 'tutorial-assets'
+const STORAGE_URL = `${supabaseUrl}/storage/v1/object/public/tutorial-assets`
 
-export async function uploadFile(file: File, path: string): Promise<string> {
-  try {
-    // Check if bucket exists
-    const { data: buckets, error: bucketsError } = await supabase
-      .storage
-      .listBuckets()
+export async function uploadFile(file: File, path: string) {
+  const { data, error } = await supabase.storage
+    .from('tutorial-assets')
+    .upload(path, file)
 
-    if (bucketsError) throw bucketsError
+  if (error) throw error
 
-    const bucketExists = buckets.some(bucket => bucket.name === BUCKET_NAME)
-    if (!bucketExists) {
-      throw new Error(`Bucket ${BUCKET_NAME} not found. Please ensure it exists in your Supabase project.`)
-    }
-
-    // Upload file
-    const { data, error } = await supabase.storage
-      .from(BUCKET_NAME)
-      .upload(path, file)
-
-    if (error) throw error
-
-    // Get public URL
-    const { data: { publicUrl }, error: urlError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .getPublicUrl(path)
-
-    if (urlError) throw urlError
-
-    return publicUrl
-  } catch (error) {
-    console.error('Error uploading file:', error)
-    throw error
-  }
+  return `${STORAGE_URL}/${path}`
 }

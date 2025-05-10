@@ -13,16 +13,9 @@ const quickLinks = ref<QuickLink[]>([])
 const isLoading = ref(true)
 const error = ref('')
 
-// Implement data prefetching with better error handling
+// Implement data prefetching
 const prefetchData = async () => {
   try {
-    // Test connection first
-    const { error: healthCheckError } = await supabase.from('categories').select('count')
-    if (healthCheckError) {
-      console.error('Supabase connection test failed:', healthCheckError)
-      throw new Error('Failed to connect to database. Please check your connection.')
-    }
-
     const [categoriesResponse, tutorialsResponse, quickLinksResponse] = await Promise.all([
       supabase.from('categories').select('*').order('order_position'),
       supabase.from('tutorials').select('*').order('order_position'),
@@ -30,17 +23,14 @@ const prefetchData = async () => {
     ])
 
     if (categoriesResponse.error) {
-      console.error('Categories fetch error:', categoriesResponse.error)
       throw new Error(`Failed to fetch categories: ${categoriesResponse.error.message}`)
     }
 
     if (tutorialsResponse.error) {
-      console.error('Tutorials fetch error:', tutorialsResponse.error)
       throw new Error(`Failed to fetch tutorials: ${tutorialsResponse.error.message}`)
     }
 
     if (quickLinksResponse.error) {
-      console.error('Quick links fetch error:', quickLinksResponse.error)
       throw new Error(`Failed to fetch quick links: ${quickLinksResponse.error.message}`)
     }
 
@@ -50,7 +40,6 @@ const prefetchData = async () => {
       quickLinks: quickLinksResponse.data
     }
   } catch (err) {
-    console.error('Detailed Supabase error:', err)
     throw err
   }
 }

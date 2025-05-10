@@ -18,7 +18,10 @@ const selectedImage = ref({
   alt: ''
 })
 
+// Configure marked to properly handle lists
 marked.use({
+  gfm: true,
+  breaks: true,
   renderer: {
     html(html) {
       return html.replace(
@@ -35,6 +38,13 @@ marked.use({
           return match
         }
       )
+    },
+    list(body, ordered) {
+      const type = ordered ? 'ol' : 'ul'
+      return `<${type} class="${ordered ? 'numbered-list' : 'bullet-list'}">${body}</${type}>`
+    },
+    listitem(text) {
+      return `<li class="list-item">${text}</li>`
     }
   }
 })
@@ -304,13 +314,23 @@ const selectTutorial = (tutorial: Tutorial) => {
   margin-bottom: 1rem;
 }
 
-.content-body :deep(ul) {
+.content-body :deep(ul.bullet-list),
+.content-body :deep(ol.numbered-list) {
   margin: 1rem 0;
-  padding-left: 1.5rem;
+  padding-left: 2rem;
 }
 
-.content-body :deep(li) {
+.content-body :deep(ul.bullet-list) {
+  list-style-type: disc;
+}
+
+.content-body :deep(ol.numbered-list) {
+  list-style-type: decimal;
+}
+
+.content-body :deep(li.list-item) {
   margin-bottom: 0.5rem;
+  padding-left: 0.5rem;
 }
 
 .content-body :deep(.tutorial-step) {

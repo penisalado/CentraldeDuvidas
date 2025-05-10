@@ -11,7 +11,7 @@ import TutorialRating from './TutorialRating.vue'
 import { Editor } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
-import Video from '@tiptap/extension-video'
+import { Video } from '@tiptap/extension-video'
 import { useStorage } from '@vueuse/core'
 
 // Hooks do Vue Router

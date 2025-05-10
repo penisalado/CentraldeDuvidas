@@ -39,15 +39,38 @@ export type QuickLink = {
   updated_at: string
 }
 
-// Bucket para armazenamento de arquivos
+export type TutorialImage = {
+  id: string
+  tutorial_id: string
+  url: string
+  filename: string
+  created_at: string
+}
+
+// Bucket for storing tutorial images
 const STORAGE_URL = `${supabaseUrl}/storage/v1/object/public/tutorial-assets`
 
-export async function uploadFile(file: File, path: string) {
+export async function uploadTutorialImage(file: File): Promise<string> {
+  const filename = `${Date.now()}-${file.name}`
   const { data, error } = await supabase.storage
     .from('tutorial-assets')
-    .upload(path, file)
+    .upload(filename, file)
 
   if (error) throw error
 
-  return `${STORAGE_URL}/${path}`
+  // Get public URL
+  const { data: { publicUrl } } = supabase.storage
+    .from('tutorial-assets')
+    .getPublicUrl(filename)
+
+  return publicUrl
+}
+
+export async function saveTutorialImage(tutorialId: string, url: string, filename: string) {
+  const { data, error } = await supabase
+    .from('tutorial_images')
+    .insert([{ tutorial_id: tutorialId, url, filename }])
+
+  if (error) throw error
+  return data
 }

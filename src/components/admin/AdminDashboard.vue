@@ -1,3 +1,4 @@
+<script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Editor } from '@tiptap/vue-3'
@@ -111,11 +112,9 @@ const handleImageUpload = async (file: File, view: any) => {
     error.value = 'Error uploading image'
   }
 }
-
-// Rest of your existing component code...
+</script>
 
 <template>
-  <!-- Rest of your existing template -->
   <div 
     class="border rounded-lg p-4 min-h-[300px] relative"
     @dragover.prevent
@@ -129,11 +128,9 @@ const handleImageUpload = async (file: File, view: any) => {
       Arraste e solte imagens aqui ou comece a digitar...
     </div>
   </div>
-  <!-- Rest of your existing template -->
 </template>
 
 <style>
-/* Rest of your existing styles */
 .ProseMirror img {
   max-width: 100%;
   height: auto;

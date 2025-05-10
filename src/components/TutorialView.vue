@@ -25,6 +25,7 @@ const selectedImage = ref({
 
 // Estado de erro do upload
 const uploadError = ref('')
+const isUploading = ref(false)
 
 // Editor TipTap
 const editor = new Editor({
@@ -81,12 +82,14 @@ const error = ref('')
 const uploadImage = async (file: File) => {
   try {
     uploadError.value = ''
+    isUploading.value = true
+    
     const fileExt = file.name.split('.').pop()
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
-    const filePath = `tutorial-images/${fileName}`
+    const fileName = `${Date.now()}-${file.name}`
+    const filePath = `${fileName}`
 
     const { data, error: uploadError } = await supabase.storage
-      .from('tutorial-assets')
+      .from('tutorial-images')
       .upload(filePath, file, {
         cacheControl: '3600',
         upsert: false
@@ -97,7 +100,7 @@ const uploadImage = async (file: File) => {
     }
 
     const { data: { publicUrl } } = supabase.storage
-      .from('tutorial-assets')
+      .from('tutorial-images')
       .getPublicUrl(filePath)
 
     return publicUrl
@@ -105,6 +108,8 @@ const uploadImage = async (file: File) => {
     await logError(error, 'uploadImage')
     uploadError.value = 'Erro ao fazer upload da imagem. Por favor, tente novamente.'
     throw error
+  } finally {
+    isUploading.value = false
   }
 }
 
@@ -268,10 +273,15 @@ const selectTutorial = (tutorial: Tutorial) => {
               @change="handleImageUpload"
               class="hidden-input"
               id="image-upload"
+              :disabled="isUploading"
             />
-            <label for="image-upload" class="upload-button">
+            <label 
+              for="image-upload" 
+              class="upload-button"
+              :class="{ 'uploading': isUploading }"
+            >
               <Icon icon="material-symbols:add-photo-alternate" class="upload-icon" />
-              Adicionar Imagem
+              {{ isUploading ? 'Enviando...' : 'Adicionar Imagem' }}
             </label>
             <!-- Mensagem de erro do upload -->
             <p v-if="uploadError" class="upload-error">{{ uploadError }}</p>
@@ -443,9 +453,15 @@ const selectTutorial = (tutorial: Tutorial) => {
   transition: all 0.2s;
 }
 
-.upload-button:hover {
+.upload-button:hover:not(.uploading) {
   background-color: #e9ecef;
   border-color: #ced4da;
+}
+
+.upload-button.uploading {
+  background-color: #e9ecef;
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
 .upload-icon {
@@ -459,6 +475,11 @@ const selectTutorial = (tutorial: Tutorial) => {
   border-radius: 4px;
   margin: 1rem 0;
   cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.tutorial-image:hover {
+  transform: scale(1.01);
 }
 
 /* Upload error message */

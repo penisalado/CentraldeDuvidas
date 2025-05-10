@@ -48,16 +48,55 @@ export type QuickLink = {
 // URL base para acessar arquivos no bucket de armazenamento
 const STORAGE_URL = `${supabaseUrl}/storage/v1/object/public/tutorial-assets`
 
+// Sistema de logs
+export const logError = async (error: any, context: string) => {
+  console.error(`Error in ${context}:`, error)
+  
+  try {
+    const { error: logError } = await supabase
+      .from('error_logs')
+      .insert([
+        {
+          error_message: error.message || String(error),
+          error_stack: error.stack,
+          context,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            userAgent: navigator.userAgent,
+            url: window.location.href
+          }
+        }
+      ])
+
+    if (logError) {
+      console.error('Failed to log error:', logError)
+    }
+  } catch (logError) {
+    console.error('Failed to log error:', logError)
+  }
+}
+
 // Função para fazer upload de arquivos
 export async function uploadFile(file: File, path: string) {
-  // Faz o upload do arquivo para o bucket tutorial-assets
-  const { data, error } = await supabase.storage
-    .from('tutorial-assets')
-    .upload(path, file)
+  try {
+    // Faz o upload do arquivo para o bucket tutorial-assets
+    const { data, error } = await supabase.storage
+      .from('tutorial-assets')
+      .upload(path, file, {
+        cacheControl: '3600',
+        upsert: false
+      })
 
-  // Se houver erro, lança a exceção
-  if (error) throw error
+    // Se houver erro, lança a exceção
+    if (error) {
+      await logError(error, 'uploadFile')
+      throw error
+    }
 
-  // Retorna a URL pública do arquivo
-  return `${STORAGE_URL}/${path}`
+    // Retorna a URL pública do arquivo
+    return `${STORAGE_URL}/${path}`
+  } catch (error) {
+    await logError(error, 'uploadFile')
+    throw error
+  }
 }

@@ -3,7 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
 import { Icon } from '@iconify/vue'
-import { supabase } from '../lib/supabase'
+import { supabase, logError } from '../lib/supabase'
 import type { Category, Tutorial } from '../lib/supabase'
 import SearchBar from './SearchBar.vue'
 import ImageModal from './ImageModal.vue'
@@ -22,6 +22,9 @@ const selectedImage = ref({
   src: '',
   alt: ''
 })
+
+// Estado de erro do upload
+const uploadError = ref('')
 
 // Editor TipTap
 const editor = new Editor({
@@ -77,8 +80,9 @@ const error = ref('')
 // Função para fazer upload de imagem
 const uploadImage = async (file: File) => {
   try {
+    uploadError.value = ''
     const fileExt = file.name.split('.').pop()
-    const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
     const filePath = `tutorial-images/${fileName}`
 
     const { data, error: uploadError } = await supabase.storage
@@ -88,7 +92,9 @@ const uploadImage = async (file: File) => {
         upsert: false
       })
 
-    if (uploadError) throw uploadError
+    if (uploadError) {
+      throw uploadError
+    }
 
     const { data: { publicUrl } } = supabase.storage
       .from('tutorial-assets')
@@ -96,7 +102,8 @@ const uploadImage = async (file: File) => {
 
     return publicUrl
   } catch (error) {
-    console.error('Error uploading image:', error)
+    await logError(error, 'uploadImage')
+    uploadError.value = 'Erro ao fazer upload da imagem. Por favor, tente novamente.'
     throw error
   }
 }
@@ -107,12 +114,14 @@ const handleImageUpload = async (event: Event) => {
   if (!input.files?.length) return
 
   try {
+    uploadError.value = ''
     const file = input.files[0]
     const url = await uploadImage(file)
     
     editor.chain().focus().setImage({ src: url }).run()
   } catch (error) {
     console.error('Error handling image upload:', error)
+    uploadError.value = 'Erro ao processar a imagem. Por favor, tente novamente.'
   }
 }
 
@@ -148,6 +157,7 @@ async function loadData() {
       }
     }
   } catch (err) {
+    await logError(err, 'loadData')
     error.value = 'Erro ao carregar dados'
     console.error(err)
   } finally {
@@ -263,6 +273,8 @@ const selectTutorial = (tutorial: Tutorial) => {
               <Icon icon="material-symbols:add-photo-alternate" class="upload-icon" />
               Adicionar Imagem
             </label>
+            <!-- Mensagem de erro do upload -->
+            <p v-if="uploadError" class="upload-error">{{ uploadError }}</p>
           </div>
         </div>
         
@@ -446,6 +458,14 @@ const selectTutorial = (tutorial: Tutorial) => {
   height: auto;
   border-radius: 4px;
   margin: 1rem 0;
+  cursor: pointer;
+}
+
+/* Upload error message */
+.upload-error {
+  color: #dc3545;
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
 }
 
 /* Estados de loading e não encontrado */

@@ -1,16 +1,14 @@
 <script setup lang="ts">
+// Importações necessárias
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
 import { Icon } from '@iconify/vue'
-import { supabase, logError } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 import type { Category, Tutorial } from '../lib/supabase'
 import SearchBar from './SearchBar.vue'
 import ImageModal from './ImageModal.vue'
 import TutorialRating from './TutorialRating.vue'
-import { Editor } from '@tiptap/vue-3'
-import StarterKit from '@tiptap/starter-kit'
-import Image from '@tiptap/extension-image'
 
 // Hooks do Vue Router
 const route = useRoute()
@@ -21,26 +19,6 @@ const showImageModal = ref(false)
 const selectedImage = ref({
   src: '',
   alt: ''
-})
-
-// Estado de erro do upload
-const uploadError = ref('')
-const isUploading = ref(false)
-
-// Editor TipTap
-const editor = new Editor({
-  extensions: [
-    StarterKit,
-    Image.configure({
-      inline: true,
-      allowBase64: true,
-      HTMLAttributes: {
-        class: 'tutorial-image',
-      },
-    }),
-  ],
-  content: '',
-  editable: false,
 })
 
 // Configuração do marked para processar imagens com preview
@@ -78,58 +56,6 @@ const selectedTutorial = ref<Tutorial | null>(null)
 const isLoading = ref(true)
 const error = ref('')
 
-// Função para fazer upload de imagem
-const uploadImage = async (file: File) => {
-  try {
-    uploadError.value = ''
-    isUploading.value = true
-    
-    const fileExt = file.name.split('.').pop()
-    const fileName = `${Date.now()}-${file.name}`
-    const filePath = `${fileName}`
-
-    const { data, error: uploadError } = await supabase.storage
-      .from('tutorial-images')
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false
-      })
-
-    if (uploadError) {
-      throw uploadError
-    }
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('tutorial-images')
-      .getPublicUrl(filePath)
-
-    return publicUrl
-  } catch (error) {
-    await logError(error, 'uploadImage')
-    uploadError.value = 'Erro ao fazer upload da imagem. Por favor, tente novamente.'
-    throw error
-  } finally {
-    isUploading.value = false
-  }
-}
-
-// Handler para upload de imagem
-const handleImageUpload = async (event: Event) => {
-  const input = event.target as HTMLInputElement
-  if (!input.files?.length) return
-
-  try {
-    uploadError.value = ''
-    const file = input.files[0]
-    const url = await uploadImage(file)
-    
-    editor.chain().focus().setImage({ src: url }).run()
-  } catch (error) {
-    console.error('Error handling image upload:', error)
-    uploadError.value = 'Erro ao processar a imagem. Por favor, tente novamente.'
-  }
-}
-
 // Carrega dados ao montar o componente
 onMounted(async () => {
   await loadData()
@@ -158,11 +84,9 @@ async function loadData() {
       const tutorial = tutorialsResponse.data.find(t => t.id === tutorialId)
       if (tutorial) {
         selectedTutorial.value = tutorial
-        editor.commands.setContent(tutorial.content || '')
       }
     }
   } catch (err) {
-    await logError(err, 'loadData')
     error.value = 'Erro ao carregar dados'
     console.error(err)
   } finally {
@@ -222,7 +146,6 @@ watch(
 // Seleciona um tutorial
 const selectTutorial = (tutorial: Tutorial) => {
   selectedTutorial.value = tutorial
-  editor.commands.setContent(tutorial.content || '')
   router.replace({ query: { tutorial: tutorial.id } })
 }
 </script>
@@ -260,33 +183,7 @@ const selectTutorial = (tutorial: Tutorial) => {
           <div class="tutorial-code">{{ selectedTutorial.code }}</div>
           <h2>{{ selectedTutorial.title }}</h2>
         </div>
-        
-        <!-- Editor TipTap -->
-        <div class="editor-container">
-          <editor-content :editor="editor" />
-          
-          <!-- Botão de upload de imagem -->
-          <div class="image-upload">
-            <input
-              type="file"
-              accept="image/*"
-              @change="handleImageUpload"
-              class="hidden-input"
-              id="image-upload"
-              :disabled="isUploading"
-            />
-            <label 
-              for="image-upload" 
-              class="upload-button"
-              :class="{ 'uploading': isUploading }"
-            >
-              <Icon icon="material-symbols:add-photo-alternate" class="upload-icon" />
-              {{ isUploading ? 'Enviando...' : 'Adicionar Imagem' }}
-            </label>
-            <!-- Mensagem de erro do upload -->
-            <p v-if="uploadError" class="upload-error">{{ uploadError }}</p>
-          </div>
-        </div>
+        <div class="content-body" v-html="formattedContent"></div>
         
         <!-- Componente de avaliação -->
         <TutorialRating 
@@ -317,7 +214,7 @@ const selectTutorial = (tutorial: Tutorial) => {
   </div>
 </template>
 
-<style>
+<style scoped>
 /* Container principal */
 .tutorial-view {
   max-width: 1200px;
@@ -424,69 +321,96 @@ const selectTutorial = (tutorial: Tutorial) => {
   color: #2c3e50;
 }
 
-/* Editor container */
-.editor-container {
-  position: relative;
-  margin-bottom: 2rem;
+/* Corpo do conteúdo */
+.content-body {
+  line-height: 1.6;
 }
 
-/* Imagem upload */
-.image-upload {
-  margin-top: 1rem;
+/* Estilos do markdown renderizado */
+.content-body :deep(h1) {
+  font-size: 1.8rem;
+  color: #2c3e50;
+  margin-bottom: 1.5rem;
 }
 
-.hidden-input {
-  display: none;
+.content-body :deep(h2) {
+  font-size: 1.4rem;
+  color: #2c3e50;
+  margin: 2rem 0 1rem;
 }
 
-.upload-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background-color: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 4px;
-  cursor: pointer;
-  color: #495057;
-  font-size: 0.875rem;
-  transition: all 0.2s;
+.content-body :deep(p) {
+  margin-bottom: 1rem;
 }
 
-.upload-button:hover:not(.uploading) {
-  background-color: #e9ecef;
-  border-color: #ced4da;
-}
-
-.upload-button.uploading {
-  background-color: #e9ecef;
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-.upload-icon {
-  font-size: 1.25rem;
-}
-
-/* Tutorial image */
-.tutorial-image {
-  max-width: 100%;
-  height: auto;
-  border-radius: 4px;
+.content-body :deep(ul) {
   margin: 1rem 0;
-  cursor: pointer;
-  transition: transform 0.2s;
+  padding-left: 1.5rem;
 }
 
-.tutorial-image:hover {
-  transform: scale(1.01);
+.content-body :deep(li) {
+  margin-bottom: 0.5rem;
 }
 
-/* Upload error message */
-.upload-error {
-  color: #dc3545;
+/* Estilos dos passos do tutorial */
+.content-body :deep(.tutorial-step) {
+  display: flex;
+  gap: 2rem;
+  margin: 1.5rem 0;
+  align-items: flex-start;
+}
+
+.content-body :deep(.tutorial-text) {
+  flex: 1;
+}
+
+.content-body :deep(.tutorial-image) {
+  flex-shrink: 0;
+  width: 400px;
+}
+
+.content-body :deep(.tutorial-image.full-width) {
+  width: 100%;
+  margin: 1.5rem 0;
+}
+
+/* Estilos do preview de imagem */
+.content-body :deep(.image-preview) {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: zoom-in;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease;
+}
+
+.content-body :deep(.image-preview:hover) {
+  transform: scale(1.02);
+}
+
+.content-body :deep(.image-preview img) {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Zoom da imagem */
+.content-body :deep(.image-zoom) {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 0.5rem;
   font-size: 0.875rem;
-  margin-top: 0.5rem;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.content-body :deep(.image-preview:hover .image-zoom) {
+  opacity: 1;
 }
 
 /* Estados de loading e não encontrado */
@@ -508,6 +432,15 @@ const selectTutorial = (tutorial: Tutorial) => {
   
   .tutorial-content {
     padding: 1.5rem;
+  }
+
+  .content-body :deep(.tutorial-step) {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .content-body :deep(.tutorial-image) {
+    width: 100% !important;
   }
 }
 </style>

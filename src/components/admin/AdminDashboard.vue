@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { supabase } from '../../lib/supabase'
+import type { Category, Tutorial, QuickLink } from '../../lib/supabase'
 import { Icon } from '@iconify/vue'
-import { Editor } from '@tiptap/vue-3'
+import { marked } from 'marked'
+import hljs from 'highlight.js'
+import 'highlight.js/styles/github.css'
+import { useEditor, EditorContent, BubbleMenu, FloatingMenu } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
 import Link from '@tiptap/extension-link'
@@ -10,23 +15,13 @@ import TextAlign from '@tiptap/extension-text-align'
 import Underline from '@tiptap/extension-underline'
 import Strike from '@tiptap/extension-strike'
 import Highlight from '@tiptap/extension-highlight'
-import Color from '@tiptap/extension-color'
+import Typography from '@tiptap/extension-typography'
+import { Color } from '@tiptap/extension-color'
 import TextStyle from '@tiptap/extension-text-style'
 import FontFamily from '@tiptap/extension-font-family'
-import Typography from '@tiptap/extension-typography'
-import { FloatingMenu } from '@tiptap/extension-floating-menu'
-import BulletList from '@tiptap/extension-bullet-list'
-import OrderedList from '@tiptap/extension-ordered-list'
-import ListItem from '@tiptap/extension-list-item'
-import CodeBlock from '@tiptap/extension-code-block'
-import { supabase, uploadTutorialImage, saveTutorialImage } from '../../lib/supabase'
-import { marked } from 'marked'
-import hljs from 'highlight.js'
-import 'highlight.js/styles/github.css'
-import { useEditor, EditorContent, BubbleMenu } from '@tiptap/vue-3'
 import { Extension } from '@tiptap/core'
-import type { Category, Tutorial, QuickLink } from '../../lib/supabase'
 
+// Create a custom extension for font size
 const FontSize = Extension.create({
   name: 'fontSize',
 
@@ -462,20 +457,30 @@ const loadTutorials = async (categoryId: string) => {
   tutorials.value = data
 }
 
-const handleImageUpload = async (event: Event) => {
+async function handleFileUpload(event: Event) {
   const input = event.target as HTMLInputElement
-  if (!input.files?.length) return
+  if (input.files && input.files[0]) {
+    selectedFile.value = input.files[0]
+    
+    const filename = `${Date.now()}-${selectedFile.value.name}`
+    
+    const { data, error: uploadError } = await supabase.storage
+      .from('tutorial-assets')
+      .upload(filename, selectedFile.value)
 
-  const file = input.files[0]
-  try {
-    const url = await uploadTutorialImage(file)
-    if (selectedTutorial.value?.id) {
-      await saveTutorialImage(selectedTutorial.value.id, url, file.name)
+    if (uploadError) {
+      error.value = 'Erro ao fazer upload do arquivo'
+      return
     }
-    editor.value?.chain().focus().setImage({ src: url }).run()
-  } catch (error) {
-    console.error('Error uploading image:', error)
-    alert('Failed to upload image. Please try again.')
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('tutorial-assets')
+      .getPublicUrl(filename)
+
+    editor.value?.chain().focus().setImage({ 
+      src: publicUrl,
+      alt: selectedFile.value.name
+    }).run()
   }
 }
 
@@ -924,7 +929,7 @@ const editorActions = {
       const fileInput = document.createElement('input')
       fileInput.type = 'file'
       fileInput.accept = 'image/*'
-      fileInput.onchange = (e) => handleImageUpload(e)
+      fileInput.onchange = (e) => handleFileUpload(e)
       fileInput.click()
     }
   }
@@ -1653,24 +1658,5 @@ watch(selectedCategory, async (newValue) => {
   font-size: 0.75rem;
   white-space: nowrap;
   z-index: 10;
-}
-
-.tooltip-text {
-  visibility: hidden;
-  position: absolute;
-  bottom: -30px;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  white-space: nowrap;
-  z-index: 10;
-}
-
-.tooltip:hover .tooltip-text {
-  visibility: visible;
 }
 </style>

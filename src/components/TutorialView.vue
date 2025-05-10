@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// Importações necessárias
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
@@ -9,6 +8,11 @@ import type { Category, Tutorial } from '../lib/supabase'
 import SearchBar from './SearchBar.vue'
 import ImageModal from './ImageModal.vue'
 import TutorialRating from './TutorialRating.vue'
+import { Editor } from '@tiptap/vue-3'
+import StarterKit from '@tiptap/starter-kit'
+import Image from '@tiptap/extension-image'
+import Dropcursor from '@tiptap/extension-dropcursor'
+import { EditorContent } from '@tiptap/vue-3'
 
 // Hooks do Vue Router
 const route = useRoute()
@@ -19,6 +23,35 @@ const showImageModal = ref(false)
 const selectedImage = ref({
   src: '',
   alt: ''
+})
+
+// Editor TipTap
+const editor = new Editor({
+  extensions: [
+    StarterKit,
+    Image.configure({
+      inline: true,
+      allowBase64: true,
+      HTMLAttributes: {
+        class: 'tutorial-image',
+      },
+      resizable: true,
+      draggable: true,
+    }),
+    Dropcursor,
+  ],
+  content: '',
+  editable: true,
+  onDrop: (view, event, slice, moved) => {
+    if (!moved && event.dataTransfer?.files.length) {
+      const file = event.dataTransfer.files[0]
+      if (file.type.startsWith('image/')) {
+        handleImageUpload(file)
+        return true
+      }
+    }
+    return false
+  },
 })
 
 // Configuração do marked para processar imagens com preview
@@ -56,6 +89,52 @@ const selectedTutorial = ref<Tutorial | null>(null)
 const isLoading = ref(true)
 const error = ref('')
 
+// Função para fazer upload de imagem
+const uploadImage = async (file: File) => {
+  try {
+    const fileExt = file.name.split('.').pop()
+    const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`
+    const filePath = `tutorial-images/${fileName}`
+
+    const { data, error: uploadError } = await supabase.storage
+      .from('tutorial-images')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      })
+
+    if (uploadError) throw uploadError
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('tutorial-images')
+      .getPublicUrl(filePath)
+
+    return publicUrl
+  } catch (error) {
+    console.error('Error uploading image:', error)
+    throw error
+  }
+}
+
+// Handler para upload de imagem
+const handleImageUpload = async (file: File) => {
+  try {
+    const url = await uploadImage(file)
+    editor.chain().focus().setImage({ src: url }).run()
+  } catch (error) {
+    console.error('Error handling image upload:', error)
+  }
+}
+
+// Handler para drag and drop de imagens
+const handleDrop = async (event: DragEvent) => {
+  event.preventDefault()
+  const file = event.dataTransfer?.files[0]
+  if (file && file.type.startsWith('image/')) {
+    await handleImageUpload(file)
+  }
+}
+
 // Carrega dados ao montar o componente
 onMounted(async () => {
   await loadData()
@@ -84,6 +163,7 @@ async function loadData() {
       const tutorial = tutorialsResponse.data.find(t => t.id === tutorialId)
       if (tutorial) {
         selectedTutorial.value = tutorial
+        editor.commands.setContent(tutorial.content || '')
       }
     }
   } catch (err) {
@@ -146,6 +226,7 @@ watch(
 // Seleciona um tutorial
 const selectTutorial = (tutorial: Tutorial) => {
   selectedTutorial.value = tutorial
+  editor.commands.setContent(tutorial.content || '')
   router.replace({ query: { tutorial: tutorial.id } })
 }
 </script>
@@ -183,7 +264,30 @@ const selectTutorial = (tutorial: Tutorial) => {
           <div class="tutorial-code">{{ selectedTutorial.code }}</div>
           <h2>{{ selectedTutorial.title }}</h2>
         </div>
-        <div class="content-body" v-html="formattedContent"></div>
+        
+        <!-- Editor TipTap -->
+        <div 
+          class="editor-container" 
+          @drop="handleDrop"
+          @dragover.prevent
+        >
+          <editor-content :editor="editor" />
+          
+          <!-- Botão de upload de imagem -->
+          <div class="image-upload">
+            <input
+              type="file"
+              accept="image/*"
+              @change="(e) => handleImageUpload(e.target.files[0])"
+              class="hidden-input"
+              id="image-upload"
+            />
+            <label for="image-upload" class="upload-button">
+              <Icon icon="material-symbols:add-photo-alternate" class="upload-icon" />
+              Adicionar Imagem
+            </label>
+          </div>
+        </div>
         
         <!-- Componente de avaliação -->
         <TutorialRating 
@@ -214,7 +318,7 @@ const selectTutorial = (tutorial: Tutorial) => {
   </div>
 </template>
 
-<style scoped>
+<style>
 /* Container principal */
 .tutorial-view {
   max-width: 1200px;
@@ -321,96 +425,65 @@ const selectTutorial = (tutorial: Tutorial) => {
   color: #2c3e50;
 }
 
-/* Corpo do conteúdo */
-.content-body {
-  line-height: 1.6;
-}
-
-/* Estilos do markdown renderizado */
-.content-body :deep(h1) {
-  font-size: 1.8rem;
-  color: #2c3e50;
-  margin-bottom: 1.5rem;
-}
-
-.content-body :deep(h2) {
-  font-size: 1.4rem;
-  color: #2c3e50;
-  margin: 2rem 0 1rem;
-}
-
-.content-body :deep(p) {
-  margin-bottom: 1rem;
-}
-
-.content-body :deep(ul) {
-  margin: 1rem 0;
-  padding-left: 1.5rem;
-}
-
-.content-body :deep(li) {
-  margin-bottom: 0.5rem;
-}
-
-/* Estilos dos passos do tutorial */
-.content-body :deep(.tutorial-step) {
-  display: flex;
-  gap: 2rem;
-  margin: 1.5rem 0;
-  align-items: flex-start;
-}
-
-.content-body :deep(.tutorial-text) {
-  flex: 1;
-}
-
-.content-body :deep(.tutorial-image) {
-  flex-shrink: 0;
-  width: 400px;
-}
-
-.content-body :deep(.tutorial-image.full-width) {
-  width: 100%;
-  margin: 1.5rem 0;
-}
-
-/* Estilos do preview de imagem */
-.content-body :deep(.image-preview) {
+/* Editor container */
+.editor-container {
   position: relative;
+  margin-bottom: 2rem;
+  min-height: 300px;
+  border: 1px solid #e2e2e2;
   border-radius: 8px;
-  overflow: hidden;
-  cursor: zoom-in;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s ease;
+  padding: 1rem;
 }
 
-.content-body :deep(.image-preview:hover) {
-  transform: scale(1.02);
+/* Imagem upload */
+.image-upload {
+  margin-top: 1rem;
 }
 
-.content-body :deep(.image-preview img) {
-  display: block;
-  width: 100%;
-  height: auto;
+.hidden-input {
+  display: none;
 }
 
-/* Zoom da imagem */
-.content-body :deep(.image-zoom) {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  padding: 0.5rem;
+.upload-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #495057;
   font-size: 0.875rem;
-  text-align: center;
-  opacity: 0;
-  transition: opacity 0.2s;
+  transition: all 0.2s;
 }
 
-.content-body :deep(.image-preview:hover .image-zoom) {
-  opacity: 1;
+.upload-button:hover {
+  background-color: #e9ecef;
+  border-color: #ced4da;
+}
+
+.upload-icon {
+  font-size: 1.25rem;
+}
+
+/* Tutorial image */
+.tutorial-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  margin: 1rem 0;
+  cursor: move;
+  resize: both;
+  overflow: auto;
+}
+
+.tutorial-image:hover {
+  box-shadow: 0 0 0 2px #ff5722;
+}
+
+.tutorial-image.dragging {
+  opacity: 0.5;
 }
 
 /* Estados de loading e não encontrado */
@@ -433,14 +506,43 @@ const selectTutorial = (tutorial: Tutorial) => {
   .tutorial-content {
     padding: 1.5rem;
   }
+}
 
-  .content-body :deep(.tutorial-step) {
-    flex-direction: column;
-    gap: 1rem;
-  }
+/* Estilos do TipTap */
+.ProseMirror {
+  outline: none;
+  min-height: 200px;
+}
 
-  .content-body :deep(.tutorial-image) {
-    width: 100% !important;
-  }
+.ProseMirror p {
+  margin: 1em 0;
+}
+
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  cursor: move;
+  display: block;
+  margin: 1rem 0;
+  border-radius: 4px;
+}
+
+.ProseMirror img:hover {
+  box-shadow: 0 0 0 2px #ff5722;
+}
+
+.ProseMirror img.dragging {
+  opacity: 0.5;
+}
+
+.ProseMirror img.selected {
+  box-shadow: 0 0 0 2px #ff5722;
+}
+
+/* Dropcursor */
+.ProseMirror-dropcursor {
+  border-top: 2px solid #ff5722;
+  margin-top: -1px;
+  pointer-events: none;
 }
 </style>

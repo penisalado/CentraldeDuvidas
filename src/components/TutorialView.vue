@@ -18,36 +18,45 @@ const selectedImage = ref({
   alt: ''
 })
 
-// Configure marked to properly handle lists
-marked.use({
+// Configure marked with proper list handling
+marked.setOptions({
   gfm: true,
-  breaks: true,
-  renderer: {
-    html(html) {
-      return html.replace(
-        /<div class="image-preview".*?>(.*?)<\/div>/g,
-        (match, content) => {
-          const imgMatch = content.match(/src="([^"]+)".*?alt="([^"]+)"/)
-          if (imgMatch) {
-            const [_, src, alt] = imgMatch
-            return `<div class="image-preview" onclick="window.__openImage('${src}', '${alt}')">
-              ${content}
-              <span class="image-zoom">🔍 Ampliar imagem</span>
-            </div>`
-          }
-          return match
-        }
-      )
-    },
-    list(body, ordered) {
-      const type = ordered ? 'ol' : 'ul'
-      return `<${type} class="${ordered ? 'numbered-list' : 'bullet-list'}">${body}</${type}>`
-    },
-    listitem(text) {
-      return `<li class="list-item">${text}</li>`
-    }
-  }
+  breaks: true
 })
+
+const renderer = new marked.Renderer()
+
+// Override list rendering
+renderer.list = (body, ordered) => {
+  const type = ordered ? 'ol' : 'ul'
+  const className = ordered ? 'numbered-list' : 'bullet-list'
+  return `<${type} class="${className}">${body}</${type}>`
+}
+
+// Override list item rendering
+renderer.listitem = (text) => {
+  return `<li class="list-item">${text}</li>`
+}
+
+// Override image handling
+renderer.html = (html) => {
+  return html.replace(
+    /<div class="image-preview".*?>(.*?)<\/div>/g,
+    (match, content) => {
+      const imgMatch = content.match(/src="([^"]+)".*?alt="([^"]+)"/)
+      if (imgMatch) {
+        const [_, src, alt] = imgMatch
+        return `<div class="image-preview" onclick="window.__openImage('${src}', '${alt}')">
+          ${content}
+          <span class="image-zoom">🔍 Ampliar imagem</span>
+        </div>`
+      }
+      return match
+    }
+  )
+}
+
+marked.use({ renderer })
 
 window.__openImage = (src: string, alt: string) => {
   selectedImage.value = { src, alt }
@@ -314,23 +323,23 @@ const selectTutorial = (tutorial: Tutorial) => {
   margin-bottom: 1rem;
 }
 
-.content-body :deep(ul.bullet-list),
-.content-body :deep(ol.numbered-list) {
+/* List styles */
+.content-body :deep(.bullet-list) {
+  list-style-type: disc !important;
   margin: 1rem 0;
   padding-left: 2rem;
 }
 
-.content-body :deep(ul.bullet-list) {
-  list-style-type: disc;
+.content-body :deep(.numbered-list) {
+  list-style-type: decimal !important;
+  margin: 1rem 0;
+  padding-left: 2rem;
 }
 
-.content-body :deep(ol.numbered-list) {
-  list-style-type: decimal;
-}
-
-.content-body :deep(li.list-item) {
+.content-body :deep(.list-item) {
   margin-bottom: 0.5rem;
   padding-left: 0.5rem;
+  display: list-item !important;
 }
 
 .content-body :deep(.tutorial-step) {

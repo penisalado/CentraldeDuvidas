@@ -19,26 +19,21 @@ const selectedImage = ref({
 })
 
 // Configure marked with proper list handling
-marked.setOptions({
-  gfm: true,
-  breaks: true
-})
-
 const renderer = new marked.Renderer()
 
-// Override list rendering
+// Override list rendering to preserve original list type
 renderer.list = (body, ordered) => {
   const type = ordered ? 'ol' : 'ul'
   const className = ordered ? 'numbered-list' : 'bullet-list'
   return `<${type} class="${className}">${body}</${type}>`
 }
 
-// Override list item rendering
+// Override list item rendering to preserve structure
 renderer.listitem = (text) => {
   return `<li class="list-item">${text}</li>`
 }
 
-// Override image handling
+// Handle image previews
 renderer.html = (html) => {
   return html.replace(
     /<div class="image-preview".*?>(.*?)<\/div>/g,
@@ -56,7 +51,13 @@ renderer.html = (html) => {
   )
 }
 
-marked.use({ renderer })
+marked.use({ 
+  renderer,
+  gfm: true,
+  breaks: true,
+  pedantic: false,
+  smartLists: true
+})
 
 window.__openImage = (src: string, alt: string) => {
   selectedImage.value = { src, alt }

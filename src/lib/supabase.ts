@@ -51,3 +51,19 @@ export async function uploadFile(file: File, path: string) {
 
   return `${STORAGE_URL}/${path}`
 }
+
+export async function uploadMediaFile(file: File): Promise<string> {
+  const fileExt = file.name.split('.').pop()
+  const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`
+  const filePath = `media/${fileName}`
+
+  const { error: uploadError } = await supabase.storage
+    .from('tutorial-assets')
+    .upload(filePath, file)
+
+  if (uploadError) {
+    throw uploadError
+  }
+
+  return `${STORAGE_URL}/${filePath}`
+}

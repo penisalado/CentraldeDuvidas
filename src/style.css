@@ -30,6 +30,7 @@ body {
 .ProseMirror {
   caret-color: currentColor;
   outline: none !important;
+  min-height: 300px;
 }
 
 .ProseMirror .is-editor-empty:first-child::before {
@@ -114,4 +115,36 @@ body {
 
 .ProseMirror a:hover {
   color: #1d4ed8;
+}
+
+/* Image styles */
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  margin: 1em 0;
+  border-radius: 4px;
+}
+
+/* Video styles */
+.ProseMirror video {
+  max-width: 100%;
+  height: auto;
+  margin: 1em 0;
+  border-radius: 4px;
+}
+
+/* Drag and drop styles */
+.ProseMirror.drag-over {
+  border: 2px dashed #2563eb;
+  background-color: rgba(37, 99, 235, 0.1);
+}
+
+.ProseMirror .image-upload-placeholder {
+  background-color: #f3f4f6;
+  border: 2px dashed #d1d5db;
+  border-radius: 4px;
+  padding: 2rem;
+  text-align: center;
+  color: #6b7280;
+  margin: 1em 0;
 }

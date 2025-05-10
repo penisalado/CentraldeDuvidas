@@ -8,11 +8,10 @@ import type { Category, Tutorial } from '../lib/supabase'
 import SearchBar from './SearchBar.vue'
 import ImageModal from './ImageModal.vue'
 import TutorialRating from './TutorialRating.vue'
-import { Editor } from '@tiptap/vue-3'
+import { Editor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
 import Dropcursor from '@tiptap/extension-dropcursor'
-import { EditorContent } from '@tiptap/vue-3'
 
 // Hooks do Vue Router
 const route = useRoute()
@@ -24,6 +23,10 @@ const selectedImage = ref({
   src: '',
   alt: ''
 })
+
+// Estado de upload
+const isUploading = ref(false)
+const uploadError = ref('')
 
 // Editor TipTap
 const editor = new Editor({
@@ -103,7 +106,9 @@ const uploadImage = async (file: File) => {
         upsert: false
       })
 
-    if (uploadError) throw uploadError
+    if (uploadError) {
+      throw uploadError
+    }
 
     const { data: { publicUrl } } = supabase.storage
       .from('tutorial-images')
@@ -119,10 +124,20 @@ const uploadImage = async (file: File) => {
 // Handler para upload de imagem
 const handleImageUpload = async (file: File) => {
   try {
+    isUploading.value = true
+    uploadError.value = ''
+    
+    if (!file.type.startsWith('image/')) {
+      throw new Error('Por favor, selecione apenas arquivos de imagem')
+    }
+
     const url = await uploadImage(file)
     editor.chain().focus().setImage({ src: url }).run()
   } catch (error) {
     console.error('Error handling image upload:', error)
+    uploadError.value = error instanceof Error ? error.message : 'Erro ao fazer upload da imagem'
+  } finally {
+    isUploading.value = false
   }
 }
 
@@ -273,19 +288,20 @@ const selectTutorial = (tutorial: Tutorial) => {
         >
           <editor-content :editor="editor" />
           
-          <!-- Botão de upload de imagem -->
+          <!-- Upload de imagem -->
           <div class="image-upload">
             <input
               type="file"
               accept="image/*"
-              @change="(e) => handleImageUpload(e.target.files[0])"
+              @change="(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0])"
               class="hidden-input"
               id="image-upload"
             />
-            <label for="image-upload" class="upload-button">
+            <label for="image-upload" class="upload-button" :class="{ 'uploading': isUploading }">
               <Icon icon="material-symbols:add-photo-alternate" class="upload-icon" />
-              Adicionar Imagem
+              {{ isUploading ? 'Enviando...' : 'Adicionar Imagem' }}
             </label>
+            <p v-if="uploadError" class="upload-error">{{ uploadError }}</p>
           </div>
         </div>
         
@@ -463,8 +479,20 @@ const selectTutorial = (tutorial: Tutorial) => {
   border-color: #ced4da;
 }
 
+.upload-button.uploading {
+  background-color: #e9ecef;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
 .upload-icon {
   font-size: 1.25rem;
+}
+
+.upload-error {
+  color: #dc3545;
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
 }
 
 /* Tutorial image */

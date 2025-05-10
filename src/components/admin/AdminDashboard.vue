@@ -1,3 +1,4 @@
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '../../lib/supabase'
@@ -17,6 +18,7 @@ const editingTutorial = ref<Tutorial>({
 })
 
 // ... rest of the AdminDashboard.vue code ...
+</script>
 
 <template>
   <!-- ... other template code ... -->

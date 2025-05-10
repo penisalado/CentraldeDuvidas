@@ -34,8 +34,7 @@
     "@tiptap/extension-ordered-list": "^2.1.16",
     "@tiptap/extension-list-item": "^2.1.16",
     "@tiptap/extension-code-block": "^2.1.16",
-    "@tiptap/extension-dropcursor": "^2.1.16",
-    "@tiptap/extension-resize-image": "^2.1.16"
+    "@tiptap/extension-dropcursor": "^2.1.16"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.1.3",

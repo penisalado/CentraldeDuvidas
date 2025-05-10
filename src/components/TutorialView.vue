@@ -18,45 +18,25 @@ const selectedImage = ref({
   alt: ''
 })
 
-// Configure marked with proper list handling
-const renderer = new marked.Renderer()
-
-// Override list rendering to preserve original list type
-renderer.list = (body, ordered) => {
-  const type = ordered ? 'ol' : 'ul'
-  const className = ordered ? 'numbered-list' : 'bullet-list'
-  return `<${type} class="${className}">${body}</${type}>`
-}
-
-// Override list item rendering to preserve structure
-renderer.listitem = (text) => {
-  return `<li class="list-item">${text}</li>`
-}
-
-// Handle image previews
-renderer.html = (html) => {
-  return html.replace(
-    /<div class="image-preview".*?>(.*?)<\/div>/g,
-    (match, content) => {
-      const imgMatch = content.match(/src="([^"]+)".*?alt="([^"]+)"/)
-      if (imgMatch) {
-        const [_, src, alt] = imgMatch
-        return `<div class="image-preview" onclick="window.__openImage('${src}', '${alt}')">
-          ${content}
-          <span class="image-zoom">🔍 Ampliar imagem</span>
-        </div>`
-      }
-      return match
+marked.use({
+  renderer: {
+    html(html) {
+      return html.replace(
+        /<div class="image-preview".*?>(.*?)<\/div>/g,
+        (match, content) => {
+          const imgMatch = content.match(/src="([^"]+)".*?alt="([^"]+)"/)
+          if (imgMatch) {
+            const [_, src, alt] = imgMatch
+            return `<div class="image-preview" onclick="window.__openImage('${src}', '${alt}')">
+              ${content}
+              <span class="image-zoom">🔍 Ampliar imagem</span>
+            </div>`
+          }
+          return match
+        }
+      )
     }
-  )
-}
-
-marked.use({ 
-  renderer,
-  gfm: true,
-  breaks: true,
-  pedantic: false,
-  smartLists: true
+  }
 })
 
 window.__openImage = (src: string, alt: string) => {
@@ -324,23 +304,13 @@ const selectTutorial = (tutorial: Tutorial) => {
   margin-bottom: 1rem;
 }
 
-/* List styles */
-.content-body :deep(.bullet-list) {
-  list-style-type: disc !important;
+.content-body :deep(ul) {
   margin: 1rem 0;
-  padding-left: 2rem;
+  padding-left: 1.5rem;
 }
 
-.content-body :deep(.numbered-list) {
-  list-style-type: decimal !important;
-  margin: 1rem 0;
-  padding-left: 2rem;
-}
-
-.content-body :deep(.list-item) {
+.content-body :deep(li) {
   margin-bottom: 0.5rem;
-  padding-left: 0.5rem;
-  display: list-item !important;
 }
 
 .content-body :deep(.tutorial-step) {

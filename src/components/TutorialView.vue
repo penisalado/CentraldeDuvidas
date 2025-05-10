@@ -1,6 +1,160 @@
+<script setup lang="ts">
+// Importações necessárias
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { marked } from 'marked'
+import { Icon } from '@iconify/vue'
+import { supabase } from '../lib/supabase'
+import type { Category, Tutorial } from '../lib/supabase'
+import SearchBar from './SearchBar.vue'
+import ImageModal from './ImageModal.vue'
+import TutorialRating from './TutorialRating.vue'
+
+// Hooks do Vue Router
+const route = useRoute()
+const router = useRouter()
+
+// Estado do modal de imagem
+const showImageModal = ref(false)
+const selectedImage = ref({
+  src: '',
+  alt: ''
+})
+
+// Configuração do marked para processar imagens com preview
+marked.use({
+  renderer: {
+    html(html) {
+      return html.replace(
+        /<div class="image-preview".*?>(.*?)<\/div>/g,
+        (match, content) => {
+          const imgMatch = content.match(/src="([^"]+)".*?alt="([^"]+)"/)
+          if (imgMatch) {
+            const [_, src, alt] = imgMatch
+            return `<div class="image-preview" onclick="window.__openImage('${src}', '${alt}')">
+              ${content}
+              <span class="image-zoom">🔍 Ampliar imagem</span>
+            </div>`
+          }
+          return match
+        }
+      )
+    }
+  }
+})
+
+// Função global para abrir o modal de imagem
+window.__openImage = (src: string, alt: string) => {
+  selectedImage.value = { src, alt }
+  showImageModal.value = true
+}
+
+// Estados do componente
+const categories = ref<Category[]>([])
+const tutorials = ref<Tutorial[]>([])
+const selectedTutorial = ref<Tutorial | null>(null)
+const isLoading = ref(true)
+const error = ref('')
+
+// Carrega dados ao montar o componente
+onMounted(async () => {
+  await loadData()
+})
+
+// Função para carregar dados do Supabase
+async function loadData() {
+  try {
+    const categoryId = route.params.id as string
+    const tutorialId = route.query.tutorial as string
+
+    // Carrega categorias e tutoriais em paralelo
+    const [categoriesResponse, tutorialsResponse] = await Promise.all([
+      supabase.from('categories').select('*').order('order_position'),
+      supabase.from('tutorials').select('*').eq('category_id', categoryId).order('order_position')
+    ])
+
+    if (categoriesResponse.error) throw categoriesResponse.error
+    if (tutorialsResponse.error) throw tutorialsResponse.error
+
+    categories.value = categoriesResponse.data
+    tutorials.value = tutorialsResponse.data
+
+    // Seleciona tutorial se especificado na URL
+    if (tutorialId) {
+      const tutorial = tutorialsResponse.data.find(t => t.id === tutorialId)
+      if (tutorial) {
+        selectedTutorial.value = tutorial
+      }
+    }
+  } catch (err) {
+    error.value = 'Erro ao carregar dados'
+    console.error(err)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+// Estado da busca
+const searchQuery = ref('')
+
+// Filtra tutoriais baseado na busca
+const filteredTutorials = computed(() => {
+  if (!searchQuery.value) {
+    return tutorials.value
+  }
+  
+  const query = searchQuery.value.toLowerCase()
+  return tutorials.value.filter(tutorial => 
+    tutorial.title.toLowerCase().includes(query) ||
+    tutorial.code.toLowerCase().includes(query) ||
+    tutorial.content?.toLowerCase().includes(query)
+  )
+})
+
+// Obtém categoria atual
+const currentCategory = computed(() => {
+  return categories.value.find(c => c.id === route.params.id)
+})
+
+// Função para voltar
+const goBack = () => {
+  if (selectedTutorial.value) {
+    selectedTutorial.value = null
+    router.replace({ query: {} })
+  } else {
+    router.push('/')
+  }
+}
+
+// Converte markdown para HTML
+const formattedContent = computed(() => {
+  if (!selectedTutorial.value?.content) return ''
+  return marked(selectedTutorial.value.content)
+})
+
+// Observa mudanças na rota
+watch(
+  [() => route.params.id, () => route.query.tutorial],
+  async ([newCategoryId, newTutorialId]) => {
+    if (newCategoryId) {
+      await loadData()
+    }
+  },
+  { immediate: true }
+)
+
+// Seleciona um tutorial
+const selectTutorial = (tutorial: Tutorial) => {
+  selectedTutorial.value = tutorial
+  router.replace({ query: { tutorial: tutorial.id } })
+}
+</script>
+
 <template>
   <div class="tutorial-view" v-if="!isLoading">
+    <!-- Container principal -->
     <div v-if="currentCategory" class="tutorial-container">
+      <!-- Cabeçalho -->
       <div class="tutorial-header">
         <button class="back-button" @click="goBack">← Voltar</button>
         <div class="header-content">
@@ -9,6 +163,7 @@
         </div>
       </div>
 
+      <!-- Lista de tutoriais -->
       <div v-if="!selectedTutorial" class="tutorials-list">
         <div 
           v-for="tutorial in filteredTutorials" 
@@ -22,36 +177,22 @@
         </div>
       </div>
 
+      <!-- Conteúdo do tutorial -->
       <div v-else class="tutorial-content">
         <div class="tutorial-content-header">
           <div class="tutorial-code">{{ selectedTutorial.code }}</div>
           <h2>{{ selectedTutorial.title }}</h2>
         </div>
+        <div class="content-body" v-html="formattedContent"></div>
         
-        <div class="editor-container">
-          <editor-content :editor="editor" />
-          
-          <div class="image-upload">
-            <input
-              type="file"
-              accept="image/*"
-              @change="handleImageUpload"
-              class="hidden-input"
-              id="image-upload"
-            />
-            <label for="image-upload" class="upload-button">
-              <Icon icon="material-symbols:add-photo-alternate" class="upload-icon" />
-              Adicionar Imagem
-            </label>
-          </div>
-        </div>
-        
+        <!-- Componente de avaliação -->
         <TutorialRating 
           v-if="selectedTutorial"
           :tutorial-id="selectedTutorial.id"
         />
       </div>
 
+      <!-- Modal de imagem -->
       <ImageModal 
         :show="showImageModal"
         :image-src="selectedImage.src"
@@ -60,211 +201,28 @@
       />
     </div>
 
+    <!-- Mensagem de categoria não encontrada -->
     <div v-else class="not-found">
       <h2>Categoria não encontrada</h2>
       <button class="back-button" @click="router.push('/')">← Voltar para a página inicial</button>
     </div>
   </div>
 
+  <!-- Loading state -->
   <div v-else class="loading">
     <p>Carregando...</p>
   </div>
 </template>
 
-<script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { Icon } from '@iconify/vue'
-import { supabase } from '../lib/supabase'
-import type { Category, Tutorial } from '../lib/supabase'
-import SearchBar from './SearchBar.vue'
-import ImageModal from './ImageModal.vue'
-import TutorialRating from './TutorialRating.vue'
-import { Editor, EditorContent } from '@tiptap/vue-3'
-import StarterKit from '@tiptap/starter-kit'
-import Image from '@tiptap/extension-image'
-import Dropcursor from '@tiptap/extension-dropcursor'
-
-const route = useRoute()
-const router = useRouter()
-
-const showImageModal = ref(false)
-const selectedImage = ref({
-  src: '',
-  alt: ''
-})
-
-const editor = new Editor({
-  extensions: [
-    StarterKit,
-    Dropcursor,
-    Image.configure({
-      inline: true,
-      allowBase64: true,
-      HTMLAttributes: {
-        class: 'tutorial-image',
-        draggable: 'true',
-      },
-    }),
-  ],
-  content: '',
-  editable: true,
-  onDrop: (view, event, slice, moved) => {
-    if (!event.dataTransfer?.files?.length) return
-
-    const file = event.dataTransfer.files[0]
-    if (file.type.startsWith('image/')) {
-      handleImageDrop(file, view, event)
-      return true
-    }
-    return false
-  },
-})
-
-const handleImageDrop = async (file: File, view: any, event: DragEvent) => {
-  try {
-    const url = await uploadImage(file)
-    const { schema } = view.state
-    const coordinates = view.posAtCoords({
-      left: event.clientX,
-      top: event.clientY,
-    })
-
-    const node = schema.nodes.image.create({ src: url })
-    const transaction = view.state.tr.insert(coordinates.pos, node)
-    view.dispatch(transaction)
-  } catch (error) {
-    console.error('Error handling image drop:', error)
-  }
-}
-
-const uploadImage = async (file: File) => {
-  try {
-    const fileExt = file.name.split('.').pop()
-    const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`
-    const filePath = `tutorial-images/${fileName}`
-
-    const { data, error: uploadError } = await supabase.storage
-      .from('tutorial-assets')
-      .upload(filePath, file)
-
-    if (uploadError) throw uploadError
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('tutorial-assets')
-      .getPublicUrl(filePath)
-
-    return publicUrl
-  } catch (error) {
-    console.error('Error uploading image:', error)
-    throw error
-  }
-}
-
-const handleImageUpload = async (event: Event) => {
-  const input = event.target as HTMLInputElement
-  if (!input.files?.length) return
-
-  try {
-    const file = input.files[0]
-    const url = await uploadImage(file)
-    
-    editor.chain().focus().setImage({ src: url }).run()
-  } catch (error) {
-    console.error('Error handling image upload:', error)
-  }
-}
-
-const categories = ref<Category[]>([])
-const tutorials = ref<Tutorial[]>([])
-const selectedTutorial = ref<Tutorial | null>(null)
-const isLoading = ref(true)
-const error = ref('')
-const searchQuery = ref('')
-
-onMounted(async () => {
-  await loadData()
-})
-
-async function loadData() {
-  try {
-    const categoryId = route.params.id as string
-    const tutorialId = route.query.tutorial as string
-
-    const [categoriesResponse, tutorialsResponse] = await Promise.all([
-      supabase.from('categories').select('*').order('order_position'),
-      supabase.from('tutorials').select('*').eq('category_id', categoryId).order('order_position')
-    ])
-
-    if (categoriesResponse.error) throw categoriesResponse.error
-    if (tutorialsResponse.error) throw tutorialsResponse.error
-
-    categories.value = categoriesResponse.data
-    tutorials.value = tutorialsResponse.data
-
-    if (tutorialId) {
-      const tutorial = tutorialsResponse.data.find(t => t.id === tutorialId)
-      if (tutorial) {
-        selectedTutorial.value = tutorial
-        editor.commands.setContent(tutorial.content || '')
-      }
-    }
-  } catch (err) {
-    error.value = 'Erro ao carregar dados'
-    console.error(err)
-  } finally {
-    isLoading.value = false
-  }
-}
-
-const filteredTutorials = computed(() => {
-  if (!searchQuery.value) return tutorials.value
-  
-  const query = searchQuery.value.toLowerCase()
-  return tutorials.value.filter(tutorial => 
-    tutorial.title.toLowerCase().includes(query) ||
-    tutorial.code.toLowerCase().includes(query) ||
-    tutorial.content?.toLowerCase().includes(query)
-  )
-})
-
-const currentCategory = computed(() => {
-  return categories.value.find(c => c.id === route.params.id)
-})
-
-const goBack = () => {
-  if (selectedTutorial.value) {
-    selectedTutorial.value = null
-    router.replace({ query: {} })
-  } else {
-    router.push('/')
-  }
-}
-
-const selectTutorial = (tutorial: Tutorial) => {
-  selectedTutorial.value = tutorial
-  editor.commands.setContent(tutorial.content || '')
-  router.replace({ query: { tutorial: tutorial.id } })
-}
-
-watch(
-  [() => route.params.id, () => route.query.tutorial],
-  async ([newCategoryId, newTutorialId]) => {
-    if (newCategoryId) {
-      await loadData()
-    }
-  },
-  { immediate: true }
-)
-</script>
-
-<style>
+<style scoped>
+/* Container principal */
 .tutorial-view {
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem;
 }
 
+/* Cabeçalho */
 .tutorial-header {
   margin-bottom: 2rem;
 }
@@ -279,6 +237,7 @@ watch(
   font-size: 1.8rem;
 }
 
+/* Botão voltar */
 .back-button {
   background: none;
   border: none;
@@ -294,6 +253,7 @@ watch(
   text-decoration: underline;
 }
 
+/* Lista de tutoriais */
 .tutorials-list {
   background: white;
   border-radius: 12px;
@@ -301,6 +261,7 @@ watch(
   overflow: hidden;
 }
 
+/* Item da lista */
 .tutorial-item {
   display: flex;
   align-items: center;
@@ -318,6 +279,7 @@ watch(
   border-bottom: none;
 }
 
+/* Código do tutorial */
 .tutorial-code {
   font-family: monospace;
   color: #ff5722;
@@ -327,16 +289,19 @@ watch(
   min-width: 80px;
 }
 
+/* Título do tutorial */
 .tutorial-title {
   flex: 1;
   color: #2c3e50;
 }
 
+/* Ícone do tutorial */
 .tutorial-icon {
   color: #6c757d;
   font-size: 1.25rem;
 }
 
+/* Conteúdo do tutorial */
 .tutorial-content {
   background: white;
   padding: 2rem;
@@ -344,6 +309,7 @@ watch(
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
+/* Cabeçalho do conteúdo */
 .tutorial-content-header {
   margin-bottom: 2rem;
   padding-bottom: 1rem;
@@ -355,75 +321,106 @@ watch(
   color: #2c3e50;
 }
 
-.editor-container {
+/* Corpo do conteúdo */
+.content-body {
+  line-height: 1.6;
+}
+
+/* Estilos do markdown renderizado */
+.content-body :deep(h1) {
+  font-size: 1.8rem;
+  color: #2c3e50;
+  margin-bottom: 1.5rem;
+}
+
+.content-body :deep(h2) {
+  font-size: 1.4rem;
+  color: #2c3e50;
+  margin: 2rem 0 1rem;
+}
+
+.content-body :deep(p) {
+  margin-bottom: 1rem;
+}
+
+.content-body :deep(ul) {
+  margin: 1rem 0;
+  padding-left: 1.5rem;
+}
+
+.content-body :deep(li) {
+  margin-bottom: 0.5rem;
+}
+
+/* Estilos dos passos do tutorial */
+.content-body :deep(.tutorial-step) {
+  display: flex;
+  gap: 2rem;
+  margin: 1.5rem 0;
+  align-items: flex-start;
+}
+
+.content-body :deep(.tutorial-text) {
+  flex: 1;
+}
+
+.content-body :deep(.tutorial-image) {
+  flex-shrink: 0;
+  width: 400px;
+}
+
+.content-body :deep(.tutorial-image.full-width) {
+  width: 100%;
+  margin: 1.5rem 0;
+}
+
+/* Estilos do preview de imagem */
+.content-body :deep(.image-preview) {
   position: relative;
-  margin-bottom: 2rem;
-  border: 1px solid #e2e2e2;
   border-radius: 8px;
   overflow: hidden;
+  cursor: zoom-in;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease;
 }
 
-.ProseMirror {
-  padding: 1rem;
-  min-height: 300px;
-  outline: none;
+.content-body :deep(.image-preview:hover) {
+  transform: scale(1.02);
 }
 
-.ProseMirror img {
-  max-width: 100%;
+.content-body :deep(.image-preview img) {
+  display: block;
+  width: 100%;
   height: auto;
-  cursor: move;
-  display: inline-block;
-  margin: 1rem 0;
-  border-radius: 4px;
-  resize: both;
-  overflow: hidden;
-  border: 1px solid transparent;
 }
 
-.ProseMirror img:hover {
-  border-color: #ff5722;
-}
-
-.image-upload {
-  padding: 1rem;
-  border-top: 1px solid #e2e2e2;
-  background: #f8f9fa;
-}
-
-.hidden-input {
-  display: none;
-}
-
-.upload-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background-color: white;
-  border: 1px solid #dee2e6;
-  border-radius: 4px;
-  cursor: pointer;
-  color: #495057;
+/* Zoom da imagem */
+.content-body :deep(.image-zoom) {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 0.5rem;
   font-size: 0.875rem;
-  transition: all 0.2s;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.2s;
 }
 
-.upload-button:hover {
-  background-color: #f1f3f5;
-  border-color: #ced4da;
+.content-body :deep(.image-preview:hover .image-zoom) {
+  opacity: 1;
 }
 
-.upload-icon {
-  font-size: 1.25rem;
-}
-
+/* Estados de loading e não encontrado */
 .loading, .not-found {
   text-align: center;
   padding: 2rem;
   color: #6c757d;
 }
 
+/* Responsividade */
 @media (max-width: 768px) {
   .tutorial-view {
     padding: 1rem;
@@ -435,6 +432,15 @@ watch(
   
   .tutorial-content {
     padding: 1.5rem;
+  }
+
+  .content-body :deep(.tutorial-step) {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .content-body :deep(.tutorial-image) {
+    width: 100% !important;
   }
 }
 </style>
